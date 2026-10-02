@@ -27,6 +27,8 @@ The model in `model.py` gives the same score as the real program (0.97).
 |---|---|
 | `model.py` | Python copy of the password check. It reads the tables from the `.exe`. |
 | `solve.py` | Finds random passwords that the model accepts. Also tests three bad inputs. |
+| `gen_sample.py` | Writes a random sample of valid passwords. Default: 10 000 lines. |
+| `valid_passwords_sample.txt` | 10 000 valid passwords from `gen_sample.py`. |
 | `patch_sentinel.py` | Writes a copy of the `.exe` with the sentinel disabled. |
 
 Run the scripts with `pefile` from `uvx`:
@@ -178,6 +180,19 @@ The other inputs:
 - The length is 16.
 
 The result is `z = +3.64` and score 0.974. The real program prints `confidence 0.97`.
+
+#### Number of valid passwords
+
+The middle has 12 characters. Each one is one of 94 printable characters (33 to 126):
+
+```
+94^12                      ≈ 4.8 × 10^23
+× P(4 digits or more)      ≈ 0.031
+× 9/256 (d ≤ 4)            ≈ 0.035
+= valid passwords          ≈ 5 × 10^20
+```
+
+This is an estimate. Inputs f3 to f5 can change the result when `d` is 3 or 4. A list of all valid passwords needs about 9 zettabytes, so the repository holds only a random sample. `gen_sample.py` found 10 000 valid passwords in 7 688 000 random tries, a rate of 0.13 %. This rate agrees with the estimate (0.11 %). Five random lines from the sample passed in the real program.
 
 #### Recipe
 
