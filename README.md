@@ -53,6 +53,8 @@ The scripts read the sample from `~/Downloads/6abd98190885f990699dc084/crackme03
 | `0x140003040` | `token_to_semantic_id` | Maps a token to its meaning through a table. |
 | `0x140002e50` | `sentinel_fire_exit` | Prints `HOSTILE ENVIRONMENT detected!` and calls `ExitProcess(3)`. |
 | `0x1400033f0` | `decrypt_llm_weights` | Decrypts the weights of the language model with xorshift32. |
+| `0x140005450` | `check_code_integrity` | Compares code in memory with the files on disk. Gives the `sys`, `self` and `text` values. |
+| `0x1400057f0` | `load_disk_images` | Reads the own `.exe` and the system DLL files from disk. |
 | `0x14000d8d0` | `tanhf` | `tanh` for `float`. |
 | `0x14000da20` | `expf` | `exp` for `float`. |
 
@@ -239,6 +241,30 @@ generated: HOSTILE R_FLAGS EOS | min_margin=5.94 | sensors: bd=1 ...
 
 The attach sets `BeingDebugged` in the PEB, so the token changes from `BD0` to `BD1`. The model then generates `HOSTILE` and gives the reason `R_FLAGS`. The program stops with exit code 3. The other sensors stay at 0 under Wine.
 
+### Code integrity sensors
+
+`check_code_integrity` gives three values. Each one compares code in memory with a copy of the file on disk.
+
+| Value | What it compares |
+|---|---|
+| `sys` | The first 16 bytes of some API functions in system DLLs. A change shows a hook. |
+| `self` | A list of the program's own functions. |
+| `text` | All of `.text`. The value is the count of bytes that differ. The count stops at `0xffff`. |
+
+At start, `load_disk_images` calls `GetModuleFileNameA` and reads the own `.exe` into `g_self_file_buf` (`0x140110d28`). It also reads the system DLLs from `GetSystemDirectoryA`.
+
+Thus a patch in the file on disk changes both copies, and `text` stays 0. A patch in memory changes only one copy.
+
+Test: attach `winedbg`, write `B0 01 90` at `0x140004a0d` in memory, then detach. The next scan gives:
+
+```
+sensors: bd=1 ... sys=0 self=1 text=3 sysc=5
+```
+
+`text=3` is the count of the 3 changed bytes. `self=1` shows that `score_password_mlp` is in the `self` list. Wine kept `bd=1` after the detach, so the reason for the verdict was `R_FLAGS`.
+
+Lesson: a check against the file on disk does not see a patch in the file. Patch the file, not the memory.
+
 ### Patches
 
 | Patch | Address | File offset | Bytes |
@@ -256,4 +282,4 @@ The second patch works only for an input of 16 characters. At `0x140004a03`, a `
 
 ## Open items
 
-- The `text` sensor did not detect a patch in the file. Its exact check is not known.
+- The memory test did not give a HOSTILE verdict from `text` alone. Wine kept `BeingDebugged` set after the detach, so `R_FLAGS` was the reason. A test without a debugger needs a separate program that calls `WriteProcessMemory`.
