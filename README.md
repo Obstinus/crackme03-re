@@ -78,6 +78,111 @@ A shuffle puts the 6 inputs in a different order before the network reads them. 
 
 `AI-` + 12 letters and digits + `!`. The sum of all 16 bytes, mod 256, must be `0x65`. Use more than 3 digits and many different characters.
 
+### The math of a valid password
+
+All numbers in this section come from `model.py`, with the real weights.
+
+#### Step 1: the network
+
+The network calculates one number `z`:
+
+```
+h[j] = tanh( sum_i Wh[j][i] * f[i] + bh[j] )     j = 0..7
+z    = sum_j Wo[j] * h[j] + bo                   bo = -1.536
+score = 1 / (1 + exp(-z))
+```
+
+The score is 0.5 or more when `z ≥ 0`. Thus the password must give `z ≥ 0`.
+
+#### Step 2: which inputs are important
+
+Start with the valid password `AI-K1flo0E026Iz!` (`z = +3.64`). Change one input at a time:
+
+| Change | z | Score | Result |
+|---|---|---|---|
+| none | +3.64 | 0.974 | accept |
+| f0 = 0 (no `AI-` or no `!`) | -3.97 | 0.019 | reject |
+| f1 = 0 (wrong byte sum) | -18.33 | 0.000 | reject |
+| f2 = 0 (3 digits or fewer) | -3.37 | 0.033 | reject |
+| f3 = 0 (distinct characters) | +3.03 | 0.954 | accept |
+| f4 = 1 (upper case) | +3.83 | 0.979 | accept |
+| f5 = 1 (lower case) | +3.74 | 0.977 | accept |
+
+Inputs f0, f1 and f2 must all be 1. Inputs f3, f4 and f5 change `z` by less than 0.7, so they are almost not important. With all inputs at 0, `z = -21.1`.
+
+#### Step 3: why f1 is the most important input
+
+Two hidden units do most of the work. Each one is an AND gate on f1:
+
+| Unit | Weight on f1 | Bias | Output weight |
+|---|---|---|---|
+| h6 | +4.54 | -5.04 | +6.83 |
+| h0 | +3.28 | -3.86 | +5.16 |
+
+When f1 = 1, the sum is about 0 and `tanh` is near 0. When f1 = 0, the sum is about -5 and `tanh` is near -1. Then `6.83 × (-1)` and `5.16 × (-1)` pull `z` down by about 12. This is why a wrong byte sum gives `z = -18.3`.
+
+#### Step 4: the byte sum
+
+The code calculates the distance `d`:
+
+```
+d  = abs( (sum of all bytes mod 256) - 0x65 )
+f1 = max(0, 1 - d/64)
+```
+
+With f0, f2 and the other inputs as in the example, `z` falls when `d` increases:
+
+| d | 0 | 1 | 2 | 3 | 4 | 5 | 6 |
+|---|---|---|---|---|---|---|---|
+| z | +3.64 | +2.77 | +1.87 | +0.97 | +0.06 | -0.84 | -1.73 |
+
+Thus `d` must be 4 or less. The byte sum mod 256 must be in the range `0x61` to `0x69`. Use `d = 0` for a good margin.
+
+#### Step 5: calculate the middle 12 characters
+
+The fixed parts have a known sum:
+
+```
+'A' + 'I' + '-' + '!' = 65 + 73 + 45 + 33 = 216 = 0xD8
+```
+
+The middle 12 bytes must give the rest:
+
+```
+middle sum ≡ 0x65 - 0xD8 ≡ -0x73 ≡ 0x8D = 141   (mod 256)
+```
+
+Twelve letters and digits (bytes 48 to 122) give a sum from 576 to 1464. In this range, the possible values are 141 + 256k:
+
+```
+653, 909, 1165, 1421
+```
+
+#### Step 6: example
+
+`K1flo0E026Iz` has a byte sum of 909. Then:
+
+```
+216 + 909 = 1125 = 0x465
+0x465 mod 256 = 0x65      ->  d = 0, f1 = 1
+```
+
+The other inputs:
+
+- f0 = 1: the password starts with `AI-`, ends with `!`, and all characters are printable.
+- f2 = 1: the digits are `1 0 0 2 6`, that is 5 digits, more than 3.
+- The length is 16.
+
+The result is `z = +3.64` and score 0.974. The real program prints `confidence 0.97`.
+
+#### Recipe
+
+1. Write `AI-` and `!`.
+2. Select 12 letters and digits for the middle. Include 4 digits or more.
+3. Add the bytes of the 12 characters.
+4. Change one character until the sum is 653, 909, 1165 or 1421.
+5. Make sure that the length is 16.
+
 ### Tables in the binary
 
 | Address | Content | Decryption |
