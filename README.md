@@ -27,8 +27,8 @@ The model in `model.py` gives the same score as the real program (0.97).
 |---|---|
 | `model.py` | Python copy of the password check. It reads the tables from the `.exe`. |
 | `solve.py` | Finds random passwords that the model accepts. Also tests three bad inputs. |
-| `gen_sample.py` | Writes a random sample of valid passwords. Default: 10 000 lines. |
-| `valid_passwords_sample.txt` | 10 000 valid passwords from `gen_sample.py`. |
+| `gen_sample.py` | Writes a random sample of valid passwords. Arguments: count (default 10 000), output file, maximum `d` (default 0). |
+| `valid_passwords_sample.txt` | 10 000 valid passwords with `d = 0`. The lowest score is 0.970. |
 | `patch_sentinel.py` | Writes a copy of the `.exe` with the sentinel disabled. |
 
 Run the scripts with `pefile` from `uvx`:
@@ -192,7 +192,21 @@ The middle has 12 characters. Each one is one of 94 printable characters (33 to 
 = valid passwords          ≈ 5 × 10^20
 ```
 
-This is an estimate. Inputs f3 to f5 can change the result when `d` is 3 or 4. A list of all valid passwords needs about 9 zettabytes, so the repository holds only a random sample. `gen_sample.py` found 10 000 valid passwords in 7 688 000 random tries, a rate of 0.13 %. This rate agrees with the estimate (0.11 %). Five random lines from the sample passed in the real program.
+This is an estimate. Inputs f3 to f5 can change the result when `d` is 3 or 4. A list of all valid passwords needs about 9 zettabytes, so the repository holds only a random sample. With `d ≤ 4`, `gen_sample.py` found 10 000 valid passwords in 7 688 000 random tries, a rate of 0.13 %. This rate agrees with the estimate (0.11 %).
+
+#### Score of 0.90 or more
+
+| d | Byte sum mod 256 | Score |
+|---|---|---|
+| 0 | `0x65` | 0.95 to 0.98, always |
+| 1 | `0x64`, `0x66` | 0.90 to 0.95 for 1003 of 1014 combinations of f3 to f5 |
+| 2 | `0x63`, `0x67` | 0.84 to 0.88 |
+| 3 | `0x62`, `0x68` | 0.68 to 0.74 |
+| 4 | `0x61`, `0x69` | about 0.51 |
+
+Thus a score of 0.90 or more needs `d = 0`, or `d = 1` in most cases. Inputs f3 to f5 change the score by less than 0.03.
+
+The file `valid_passwords_sample.txt` holds only passwords with `d = 0`. The generator needed 70 597 325 tries for 10 000 passwords. Five random lines passed in the real program, with a confidence of 0.97 or 0.98.
 
 #### Recipe
 
