@@ -16,6 +16,8 @@ The `.exe` is not in this repository.
 | Original file, password `AI-K1flo0E026Iz!` | `ACCEPT (confidence 0.97)`, `ACCESS GRANTED` |
 | Sentinel patch, same password | `ACCEPT (confidence 0.97)`, no sentinel output |
 | Score patch, input `xxxxxxxxxxxxxxxx` | `ACCEPT (confidence 0.00)`, the sentinel does not detect it |
+| Original file, `winedbg` attached at the prompt | `HOSTILE R_FLAGS`, exit code 3 |
+| Sentinel patch, `winedbg` attached, valid password | `ACCESS GRANTED`, exit code 0 |
 
 The model in `model.py` gives the same score as the real program (0.97).
 
@@ -218,6 +220,25 @@ The program runs a scan at start, before each password, and in the sentinel thre
 
 Set `CRACKME_AI_VERBOSE=1` to see the tokens and the sensor values. Set `CRACKME_LLM_SELFTEST=1` to run the self-test of the model.
 
+### Test with a debugger
+
+`winedbg` cannot show the output of a program that it starts. Thus the test attaches `winedbg` to a running program:
+
+1. Start the program with `CRACKME_AI_VERBOSE=1`. Connect its input to a named pipe, so that it waits at the password prompt.
+2. Get the Wine process ID with `winedbg --command "info proc"`.
+3. Attach with a command file that holds `attach 0x<pid>` and `cont`.
+
+The sentinel thread scans again after about 1.2 s. The result of the scan:
+
+```
+ctx: ... SCAN BD1 NG0 HP0 DR0 I30 WT0 A0 B0 S0 H0 M0
+generated: HOSTILE R_FLAGS EOS | min_margin=5.94 | sensors: bd=1 ...
+[AI] sentinel verdict: HOSTILE ENVIRONMENT detected!
+[AI] evidence: ai=R_FLAGS | sensors: flags=1/0/0 dr=0 int3=0 ...
+```
+
+The attach sets `BeingDebugged` in the PEB, so the token changes from `BD0` to `BD1`. The model then generates `HOSTILE` and gives the reason `R_FLAGS`. The program stops with exit code 3. The other sensors stay at 0 under Wine.
+
 ### Patches
 
 | Patch | Address | File offset | Bytes |
@@ -235,5 +256,4 @@ The second patch works only for an input of 16 characters. At `0x140004a03`, a `
 
 ## Open items
 
-- The tests did not use a real debugger, so no test showed the HOSTILE verdict. Use x64dbg on Windows, or `winedbg`.
 - The `text` sensor did not detect a patch in the file. Its exact check is not known.
