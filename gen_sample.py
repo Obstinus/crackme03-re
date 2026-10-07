@@ -7,7 +7,7 @@ import random, sys
 from model import score, PREFIX
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 10000
 OUT = sys.argv[2] if len(sys.argv) > 2 else 'valid_passwords_sample.txt'
-MAX_D = int(sys.argv[3]) if len(sys.argv) > 3 else 0   # 0 -> score >= 0.95, 4 -> score >= 0.5
+MAX_D = int(sys.argv[3]) if len(sys.argv) > 3 else 0
 rng = random.Random(0x65)
 CH = bytes(range(33, 127))
 DIG = set(b'0123456789')
