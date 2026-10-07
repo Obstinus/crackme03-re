@@ -19,7 +19,7 @@ The `.exe` is not in this repository.
 | Original file, `winedbg` attached at the prompt | `HOSTILE R_FLAGS`, exit code 3 |
 | Sentinel patch, `winedbg` attached, valid password | `ACCESS GRANTED`, exit code 0 |
 
-The model in `model.py` gives the same score as the real program (0.97).
+`model.py` gives 0.97 for the example, the same as the real program. Over 40 random valid passwords, `model.py` and the binary print the same two-digit score in 40 of 40 cases.
 
 ## Files
 
@@ -28,7 +28,7 @@ The model in `model.py` gives the same score as the real program (0.97).
 | `model.py` | Python copy of the password check. It reads the tables from the `.exe`. |
 | `solve.py` | Finds random passwords that the model accepts. Also tests three bad inputs. |
 | `gen_sample.py` | Writes a random sample of valid passwords. Arguments: count (default 10 000), output file, maximum `d` (default 0). |
-| `valid_passwords_sample.txt` | 10 000 valid passwords with `d = 0`. The lowest score is 0.970. |
+| `valid_passwords_sample.txt` | 10 000 valid passwords with `d = 0`. The lowest score is 0.971. |
 | `patch_sentinel.py` | Writes a copy of the `.exe` with the sentinel disabled. |
 
 Run the scripts with `pefile` from `uvx`:
@@ -38,7 +38,7 @@ uvx --from pefile python solve.py
 uvx --from pefile python patch_sentinel.py /path/to/output.exe
 ```
 
-The scripts read the sample from `~/Downloads/6abd98190885f990699dc084/crackme03.exe`. Change the path at the top of each script if the sample is in a different location.
+The scripts read the sample from `~/Downloads/Crackmes/6abd98190885f990699dc084/crackme03.exe`. Change the path at the top of each script if the sample is in a different location.
 
 ## Functions
 
@@ -74,9 +74,16 @@ The scripts read the sample from `~/Downloads/6abd98190885f990699dc084/crackme03
 | f0 | 1.0 if the password starts with `AI-`, ends with `!`, and has only printable characters |
 | f1 | `max(0, 1 - abs((byte sum mod 256) - 0x65) / 64)` |
 | f2 | 1.0 if the password has more than 3 digits |
-| f3 | Number of different characters / 16 |
+| f3 | Count of characters that add a new bit / 16 (see the note below) |
 | f4 | Number of upper-case letters / 16 |
 | f5 | Number of lower-case letters / 16 |
+
+**Note on f3.** The code does not count distinct characters. It keeps one bit for each group of 8 codes, in a 32-byte table indexed by `c >> 3`. It tests the bit with `1 << (c >> 3)`, but it uses only the low 8 bits of that mask. Thus:
+
+- A character with code 64 or more (`a` to `z`, `A` to `Z`, most symbols) always adds 1, even when it repeats.
+- A character with code below 64 adds 1 only the first time its group `c >> 3` appears. Characters in one group, such as `0` and `1`, share one count.
+
+For `AI-K1flo0E026Iz!` the count is 12, not 14, so f3 = 0.75. The score is 0.9727 and the program prints 0.97. `model.py` uses the same rule.
 
 A shuffle puts the 6 inputs in a different order before the network reads them. The order is `[1, 2, 0, 5, 3, 4]`.
 
@@ -102,17 +109,17 @@ The score is 0.5 or more when `z ≥ 0`. Thus the password must give `z ≥ 0`.
 
 #### Step 2: which inputs are important
 
-Start with the valid password `AI-K1flo0E026Iz!` (`z = +3.64`). Change one input at a time:
+Start with the valid password `AI-K1flo0E026Iz!` (`z = +3.57`). Change one input at a time:
 
 | Change | z | Score | Result |
 |---|---|---|---|
-| none | +3.64 | 0.974 | accept |
-| f0 = 0 (no `AI-` or no `!`) | -3.97 | 0.019 | reject |
-| f1 = 0 (wrong byte sum) | -18.33 | 0.000 | reject |
-| f2 = 0 (3 digits or fewer) | -3.37 | 0.033 | reject |
-| f3 = 0 (distinct characters) | +3.03 | 0.954 | accept |
-| f4 = 1 (upper case) | +3.83 | 0.979 | accept |
-| f5 = 1 (lower case) | +3.74 | 0.977 | accept |
+| none | +3.57 | 0.973 | accept |
+| f0 = 0 (no `AI-` or no `!`) | -4.03 | 0.017 | reject |
+| f1 = 0 (wrong byte sum) | -18.51 | 0.000 | reject |
+| f2 = 0 (3 digits or fewer) | -3.47 | 0.030 | reject |
+| f3 = 0 (no counted characters) | +3.03 | 0.954 | accept |
+| f4 = 1 (upper case) | +2.98 | 0.952 | accept |
+| f5 = 1 (lower case) | +3.13 | 0.958 | accept |
 
 Inputs f0, f1 and f2 must all be 1. Inputs f3, f4 and f5 change `z` by less than 0.7, so they are almost not important. With all inputs at 0, `z = -21.1`.
 
@@ -125,7 +132,7 @@ Two hidden units do most of the work. Each one is an AND gate on f1:
 | h6 | +4.54 | -5.04 | +6.83 |
 | h0 | +3.28 | -3.86 | +5.16 |
 
-When f1 = 1, the sum is about 0 and `tanh` is near 0. When f1 = 0, the sum is about -5 and `tanh` is near -1. Then `6.83 × (-1)` and `5.16 × (-1)` pull `z` down by about 12. This is why a wrong byte sum gives `z = -18.3`.
+When f1 = 1, the sum is about 0 and `tanh` is near 0. When f1 = 0, the sum is about -5 and `tanh` is near -1. Then `6.83 × (-1)` and `5.16 × (-1)` pull `z` down by about 12. This is why a wrong byte sum gives `z = -18.5`.
 
 #### Step 4: the byte sum
 
@@ -140,9 +147,9 @@ With f0, f2 and the other inputs as in the example, `z` falls when `d` increases
 
 | d | 0 | 1 | 2 | 3 | 4 | 5 | 6 |
 |---|---|---|---|---|---|---|---|
-| z | +3.64 | +2.77 | +1.87 | +0.97 | +0.06 | -0.84 | -1.73 |
+| z | +3.57 | +2.70 | +1.80 | +0.90 | -0.01 | -0.92 | -1.81 |
 
-Thus `d` must be 4 or less. The byte sum mod 256 must be in the range `0x61` to `0x69`. Use `d = 0` for a good margin.
+For this password, `d` must be 3 or less. At `d = 4`, `z = -0.01` and the score is 0.498, which rejects. The byte sum mod 256 must be in the range `0x62` to `0x68`. Use `d = 0` for a good margin. Other passwords can pass at `d = 4`: see the score table below.
 
 #### Step 5: calculate the middle 12 characters
 
@@ -179,7 +186,7 @@ The other inputs:
 - f2 = 1: the digits are `1 0 0 2 6`, that is 5 digits, more than 3.
 - The length is 16.
 
-The result is `z = +3.64` and score 0.974. The real program prints `confidence 0.97`.
+The result is `z = +3.57` and score 0.973. The real program prints `confidence 0.97`.
 
 #### Number of valid passwords
 
@@ -192,19 +199,21 @@ The middle has 12 characters. Each one is one of 94 printable characters (33 to 
 = valid passwords          ≈ 5 × 10^20
 ```
 
-This is an estimate. Inputs f3 to f5 can change the result when `d` is 3 or 4. A list of all valid passwords needs about 9 zettabytes, so the repository holds only a random sample. With `d ≤ 4`, `gen_sample.py` found 10 000 valid passwords in 7 688 000 random tries, a rate of 0.13 %. This rate agrees with the estimate (0.11 %).
+This is an estimate. Inputs f3 to f5 can change the result when `d` is 3 or 4. A list of all valid passwords needs about 9 zettabytes, so the repository holds only a random sample. With `d ≤ 4`, `gen_sample.py` found 10 000 valid passwords in 7 798 875 random tries, a rate of 0.13 %. This rate agrees with the estimate (0.11 %).
 
 #### Score of 0.90 or more
 
-| d | Byte sum mod 256 | Score |
-|---|---|---|
-| 0 | `0x65` | 0.95 to 0.98, always |
-| 1 | `0x64`, `0x66` | 0.90 to 0.95 for 1003 of 1014 combinations of f3 to f5 |
-| 2 | `0x63`, `0x67` | 0.84 to 0.88 |
-| 3 | `0x62`, `0x68` | 0.68 to 0.74 |
-| 4 | `0x61`, `0x69` | about 0.51 |
+The ranges come from 20 000 random valid passwords for each `d`. Each password has at least 4 digits and the byte sum that the rule requires.
 
-Thus a score of 0.90 or more needs `d = 0`, or `d = 1` in most cases. Inputs f3 to f5 change the score by less than 0.03.
+| d | Byte sum mod 256 | Score (min to max) | Share at 0.50 or more |
+|---|---|---|---|
+| 0 | `0x65` | 0.971 to 0.978 | 100 % |
+| 1 | `0x64`, `0x66` | 0.933 to 0.948 | 100 % |
+| 2 | `0x63`, `0x67` | 0.853 to 0.881 | 100 % |
+| 3 | `0x62`, `0x68` | 0.698 to 0.757 | 100 % |
+| 4 | `0x61`, `0x69` | 0.486 to 0.551 | 91 % |
+
+Thus a score of 0.90 or more needs `d = 0` or `d = 1`. The spread comes from f3 to f5. It is 0.006 at `d = 0` and 0.015 at `d = 1`.
 
 The file `valid_passwords_sample.txt` holds only passwords with `d = 0`. The generator needed 70 597 325 tries for 10 000 passwords. Five random lines passed in the real program, with a confidence of 0.97 or 0.98.
 

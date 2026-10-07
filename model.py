@@ -1,6 +1,6 @@
 """Reimplementation of FUN_140004360 (crackme03 password scorer)."""
 import struct, math, pefile
-pe = pefile.PE('/home/sapoimundo/Downloads/6abd98190885f990699dc084/crackme03.exe', fast_load=True)
+pe = pefile.PE('/home/sapoimundo/Downloads/Crackmes/6abd98190885f990699dc084/crackme03.exe', fast_load=True)
 IB = pe.OPTIONAL_HEADER.ImageBase
 def rd(va, n): return pe.get_data(va - IB, n)
 KEY = 0          # DAT_140110ca0: .bss, never written -> 0
@@ -31,9 +31,12 @@ PREFIX = bytes(rd(0x14006c713, 3)[i] ^ ((k + 0x41*i) & 0xff) for i in range(3))
 SUFFIX = k ^ 0xb6
 
 def features(pw: bytes):
-    n = len(pw); seen = set(); c0 = c1 = c2 = 0; allb3 = 1; tot = 0
+    n = len(pw); bits = [0] * 32; new = 0; c0 = c1 = c2 = 0; allb3 = 1; tot = 0
     for b in pw:
-        c = CLS[b]; seen.add(b); tot += b
+        c = CLS[b]; tot += b
+        # f3 as in the binary: bit 1 << (b >> 3) in byte (b >> 3), tested as 8 bits
+        g = b >> 3; m = (1 << g) & 0xff
+        if not bits[g] & m: new += 1; bits[g] |= m
         c0 += c & 1; c1 += (c >> 1) & 1; c2 += (c >> 2) & 1; allb3 &= (c >> 3) & 1
     pre = n >= 3 and pw[:3] == PREFIX
     suf = n > 0 and pw[-1] == SUFFIX
@@ -41,7 +44,7 @@ def features(pw: bytes):
     d = abs((tot & 0xff) - 0x65)
     sumf = 0.0 if d > 0x80 else max(0.0, 1.0 - d / 64)
     f = [1.0 if (allb3 and suf and pre) else 0.0, sumf, 1.0 if c0 > 3 else 0.0,
-         len(seen) / 16, c1 / 16, c2 / 16]
+         new / 16, c1 / 16, c2 / 16]
     x = [0.0] * 6
     for i in range(6): x[perm[i]] = f[i]
     return f, x

@@ -1,6 +1,6 @@
 """Patch sentinel_scan (0x140001490) to 'xor eax,eax; ret' -> always 'clean'."""
 import pefile, shutil, sys
-SRC = '/home/sapoimundo/Downloads/6abd98190885f990699dc084/crackme03.exe'
+SRC = '/home/sapoimundo/Downloads/Crackmes/6abd98190885f990699dc084/crackme03.exe'
 DST = sys.argv[1] if len(sys.argv) > 1 else 'crackme03_nosentinel.exe'
 pe = pefile.PE(SRC, fast_load=True)
 off = pe.get_offset_from_rva(0x140001490 - pe.OPTIONAL_HEADER.ImageBase)
